@@ -15,8 +15,10 @@ Breaking Changes:
 - [[user-storage]](#1_4_0_absolute_user_storage_uri) settings URI must be an absolute to satisfy expectations of `vscode.json-language-features` [#8112](https://github.com/eclipse-theia/theia/pull/8112)
   - If you imlpement a custom user storage make sure to check old relaitve locations, otherwise it can cause user data loss.
 <a name="1_4_0_deprecate_languages"></a>
-- [[languages]](#1_4_0_deprecate_languages) `@theia/languages` extension is deprecated, use VS Code extensions to provide language smartness: 
+- [[languages]](#1_4_0_deprecate_languages) `@theia/languages` extension is deprecated, use VS Code extensions to provide language smartness:
   https://code.visualstudio.com/api/language-extensions/language-server-extension-guide [#8112](https://github.com/eclipse-theia/theia/pull/8112)
+<a name="1_4_0_electron_main_extension"></a>
+- [[electron]](#1_4_0_electron_main_extension) Electron applications can now be configured/extended through `inversify`. Added new `electronMain` extension points to provide inversify container modules. [#8076](https://github.com/eclipse-theia/theia/pull/8076)
 
 ## v1.3.0
 
