@@ -22,6 +22,7 @@
 /* eslint-disable no-null/no-null */
 /* eslint-disable no-shadow */
 
+import * as iconv from 'iconv-lite';
 import { injectable, inject, postConstruct } from 'inversify';
 import { basename, dirname, normalize, join } from 'path';
 import { v4 } from 'uuid';
@@ -53,10 +54,13 @@ import {
     FileOverwriteOptions,
     FileSystemProviderError,
     FileChange,
-    WatchOptions
+    WatchOptions,
+    FileUpdateOptions
 } from '../common/files';
 import { FileSystemWatcherServer } from '../common/filesystem-watcher-protocol';
 import trash = require('trash');
+import { TextDocumentContentChangeEvent } from 'vscode-languageserver-protocol';
+import { TextDocument } from 'vscode-languageserver-textdocument';
 
 export namespace DiskFileSystemProvider {
     export interface StatAndLink {
@@ -115,7 +119,8 @@ export class DiskFileSystemProvider implements Disposable,
                 FileSystemProviderCapabilities.FileOpenReadWriteClose |
                 FileSystemProviderCapabilities.FileFolderCopy |
                 FileSystemProviderCapabilities.Access |
-                FileSystemProviderCapabilities.Trash;
+                FileSystemProviderCapabilities.Trash |
+                FileSystemProviderCapabilities.Update;
 
             if (OS.type() === OS.Type.Linux) {
                 this._capabilities |= FileSystemProviderCapabilities.PathCaseSensitive;
@@ -789,6 +794,18 @@ export class DiskFileSystemProvider implements Disposable,
     }
 
     // #endregion
+
+    async updateFile(resource: URI, changes: TextDocumentContentChangeEvent[], opts: FileUpdateOptions): Promise<void> {
+        try {
+            const content = await this.readFile(resource);
+            const decoded = iconv.decode(Buffer.from(content), opts.encoding === 'utf8bom' ? 'utf8' : opts.encoding);
+            const newContent = TextDocument.update(TextDocument.create('', '', 1, decoded), changes, 2).getText();
+            const encoded = iconv.encode(newContent, opts.writeEncoding === 'utf8bom' ? 'utf8' : opts.writeEncoding, { addBOM: opts.writeBOM });
+            await this.writeFile(resource, encoded, { create: false, overwrite: true });
+        } catch (error) {
+            throw this.toFileSystemProviderError(error);
+        }
+    }
 
     // #region Helpers
 

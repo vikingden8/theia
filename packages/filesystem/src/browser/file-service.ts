@@ -50,7 +50,7 @@ import {
     Stat, WatchOptions, WriteFileOptions,
     toFileOperationResult, toFileSystemProviderErrorCode,
     ResolveFileResult, ResolveFileResultWithMetadata,
-    MoveFileOptions, CopyFileOptions, BaseStatWithMetadata, FileDeleteOptions, FileOperationOptions, hasAccessCapability
+    MoveFileOptions, CopyFileOptions, BaseStatWithMetadata, FileDeleteOptions, FileOperationOptions, hasAccessCapability, hasUpdateCapability
 } from '../common/files';
 import { createReadStream } from '../common/io';
 import { TextBuffer, TextBufferReadable, TextBufferReadableStream } from '@theia/core/lib/common/buffer';
@@ -60,6 +60,7 @@ import { FileSystemPreferences } from './filesystem-preferences';
 import { ProgressService } from '@theia/core/lib/common/progress-service';
 import { EncodingService, UTF8, ResourceEncoding, UTF8_BOM, UTF8_with_bom, UTF16le, UTF16be } from '@theia/core/lib/browser/encoding-service';
 import { DelegatingFileSystemProvider } from '../common/delegating-file-system-provider';
+import type { TextDocumentContentChangeEvent } from 'vscode-languageserver-protocol';
 
 export interface FileOperationParticipant {
 
@@ -121,6 +122,10 @@ export interface TextFileContent extends BaseStatWithMetadata {
 export interface CreateTextFileOptions extends WriteEncodingOptions, CreateFileOptions { }
 
 export interface WriteTextFileOptions extends WriteEncodingOptions, WriteFileOptions { }
+
+export interface UpdateTextFileOptions extends WriteEncodingOptions, WriteFileOptions {
+    readEncoding: string
+}
 
 export interface UserFileOperationEvent extends WaitUntilEvent {
 
@@ -543,6 +548,27 @@ export class FileService {
         return { ...content, encoding, value };
     }
 
+    async update(resource: URI, changes: TextDocumentContentChangeEvent[], options: UpdateTextFileOptions): Promise<FileStatWithMetadata & { encoding: string }> {
+        const encoding = await this.getWriteEncoding(resource, options);
+        const provider = this.throwIfFileSystemIsReadonly(await this.withWriteProvider(resource), resource);
+        try {
+            await this.validateWriteFile(provider, resource, options);
+
+            if (hasUpdateCapability(provider)) {
+                await provider.updateFile(resource, changes, {
+                    encoding: options.readEncoding,
+                    writeEncoding: encoding.encoding,
+                    writeBOM: encoding.hasBOM
+                });
+            } else {
+                throw new Error('incremental file update is not supported');
+            }
+        } catch (error) {
+            this.rethrowAsFileOperationError('Unable to write file', resource, error, options);
+        }
+        return Object.assign(await this.resolve(resource, { resolveMetadata: true }), { encoding: encoding.encoding });
+    }
+
     // #endregion
 
     // #region File Reading/Writing
@@ -638,7 +664,7 @@ export class FileService {
      * but to the same length. This is a compromise we take to avoid having to produce checksums of
      * the file content for comparison which would be much slower to compute.
      */
-    modifiedSince(stat: Stat | FileStat, options?: WriteFileOptions): boolean {
+    protected modifiedSince(stat: Stat, options?: WriteFileOptions): boolean {
         return !!options && typeof options.mtime === 'number' && typeof options.etag === 'string' && options.etag !== ETAG_DISABLED &&
             typeof stat.mtime === 'number' && typeof stat.size === 'number' &&
             options.mtime < stat.mtime && options.etag !== etag({ mtime: options.mtime /* not using stat.mtime for a reason, see above */, size: stat.size });

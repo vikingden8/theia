@@ -23,6 +23,7 @@ import URI from '@theia/core/lib/common/uri';
 import { Event } from '@theia/core/lib/common/event';
 import { Disposable as IDisposable } from '@theia/core/lib/common/disposable';
 import { TextBuffer, TextBufferReadableStream } from '@theia/core/lib/common/buffer';
+import type { TextDocumentContentChangeEvent } from 'vscode-languageserver-protocol';
 
 export const enum FileOperation {
     CREATE,
@@ -442,6 +443,12 @@ export interface FileReadStreamOptions {
     readonly length?: number;
 }
 
+export interface FileUpdateOptions {
+    encoding: string,
+    writeEncoding: string
+    writeBOM: boolean
+}
+
 export interface FileWriteOptions {
     overwrite: boolean;
     create: boolean;
@@ -495,7 +502,8 @@ export const enum FileSystemProviderCapabilities {
 
     Trash = 1 << 12,
 
-    Access = 1 << 24
+    Access = 1 << 24,
+    Update = 1 << 25
 }
 
 export enum FileSystemProviderErrorCode {
@@ -558,6 +566,8 @@ export interface FileSystemProvider {
 
     access?(resource: URI, mode?: number): Promise<void>;
     fsPath?(resource: URI): Promise<string>;
+
+    updateFile?(resource: URI, changes: TextDocumentContentChangeEvent[], opts: FileUpdateOptions): Promise<void>;
 }
 
 export interface FileSystemProviderWithAccessCapability extends FileSystemProvider {
@@ -567,6 +577,14 @@ export interface FileSystemProviderWithAccessCapability extends FileSystemProvid
 
 export function hasAccessCapability(provider: FileSystemProvider): provider is FileSystemProviderWithAccessCapability {
     return !!(provider.capabilities & FileSystemProviderCapabilities.Access);
+}
+
+export interface FileSystemProviderWithUpdateCapability extends FileSystemProvider {
+    updateFile(resource: URI, changes: TextDocumentContentChangeEvent[], opts: FileUpdateOptions): Promise<void>;
+}
+
+export function hasUpdateCapability(provider: FileSystemProvider): provider is FileSystemProviderWithUpdateCapability {
+    return !!(provider.capabilities & FileSystemProviderCapabilities.Update);
 }
 
 export interface FileSystemProviderWithFileReadWriteCapability extends FileSystemProvider {
